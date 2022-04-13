@@ -23,7 +23,7 @@ Version: OpenPrivacy 0.99
 yDgBO22WxBHv7O8X7O/jygAEzol56iUKiXmV+XmpCtmpqQUKiQrFqclFqUDBovzS
 vBSFjNSiVHsuAA==
 =njUN
-   -----END PGP MESSAGE-----`,
+-----END PGP MESSAGE-----`,
 			expectedContents: mustBase64Decode(t, "yDgBO22WxBHv7O8X7O/jygAEzol56iUKiXmV+XmpCtmpqQUKiQrFqclFqUDBovzSvBSFjNSiVHsuAA=="),
 			expectedHeaders: map[string]string{
 				"Version": "OpenPrivacy 0.99",
@@ -36,7 +36,7 @@ Version: OpenPrivacy 0.99
 yDgBO22WxBHv7O8X7O/jygAEzol56iUKiXmV+XmpCtmpqQUKiQrFqclFqUDBovzS
 vBSFjNSiVHsuAA==
 =nxUN
-   -----END PGP MESSAGE-----`,
+-----END PGP MESSAGE-----`,
 			expectedError: "armor: checksum does not match: expected 9f150d but got 9e350d",
 		},
 	}
@@ -52,6 +52,10 @@ vBSFjNSiVHsuAA==
 				require.Equal(t, len(blocks), 1)
 				assert.Equal(t, tc.expectedContents, blocks[0].Contents.Bytes())
 				assert.Equal(t, tc.expectedHeaders, blocks[0].Headers)
+
+				roundTripped, err := Armor(blocks...)
+				require.NoError(t, err)
+				assert.Equal(t, tc.input, strings.TrimSpace(string(roundTripped.Bytes())))
 			}
 		})
 	}

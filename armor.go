@@ -9,6 +9,7 @@ import (
 	"io"
 	"openpgp-go/internal"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -24,11 +25,88 @@ const (
 var headerLineRegex = regexp.MustCompile("-----BEGIN (?P<block>PGP [A-Z ]+)-----")
 var footerLineRegex = regexp.MustCompile("-----END (?P<block>PGP [A-Z ]+)-----")
 var headerRegex = regexp.MustCompile("([[:ascii:]]+): ([[:ascii:]]+)")
+const maxLineSize = 64
 
 type Block struct {
 	Type     BlockType
 	Headers  map[string]string
 	Contents *bytes.Buffer
+}
+
+func Armor(blocks ...Block) (*bytes.Buffer, error) {
+	output := new(bytes.Buffer)
+
+	for _, block := range blocks {
+		err := block.armor(output)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return output, nil
+}
+
+func (b *Block) armor(output *bytes.Buffer) error {
+	// write the header line
+	_, err := output.WriteString(fmt.Sprintf("-----BEGIN %s-----\n", string(b.Type)))
+	if err != nil {
+		return err
+	}
+
+	// write out the headers
+	keys := make([]string, 0, len(b.Headers))
+	for k := range b.Headers {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		_, err = output.WriteString(fmt.Sprintf("%s: %s\n", k, b.Headers[k]))
+		if err != nil {
+			return err
+		}
+	}
+
+	output.WriteString("\n")
+
+	// write out the body
+	base64Body := base64.StdEncoding.EncodeToString(b.Contents.Bytes())
+	for {
+		var nextLine string
+		if len(base64Body) > maxLineSize {
+			nextLine = base64Body[0:maxLineSize]
+			base64Body = base64Body[maxLineSize:]
+		} else {
+			nextLine = base64Body
+			base64Body = ""
+		}
+
+		_, err = output.WriteString(nextLine + "\n")
+		if err != nil {
+			return err
+		}
+
+		if len(base64Body) <= 0 {
+			break
+		}
+	}
+
+	// write the checksum
+	checksum := internal.ComputeCRC24(b.Contents.Bytes())
+	checksumBase64 := base64.StdEncoding.EncodeToString(checksum)
+	_, err = output.WriteString(fmt.Sprintf("=%s\n", checksumBase64))
+	if err != nil {
+		return err
+	}
+
+	// write the footer line
+	_, err = output.WriteString(fmt.Sprintf("-----END %s-----\n", string(b.Type)))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func Dearmor(input io.Reader) ([]Block, error) {
